@@ -284,6 +284,7 @@ function openSettings() {
     <p class="hint">Ссылка перенесёт все настройки на телефон. Отправьте её себе (например, в «Избранное» Telegram) и откройте на телефоне в Chrome. В ссылке ваши ключи, никому её не пересылайте.</p>
     <div class="actions" style="margin-top:0"><button class="btn small" id="s-link">🔗 Скопировать ссылку для телефона</button></div>
     <div id="s-linkout"></div>
+    <p class="hint" style="margin-top:12px">Версия: ${__BUILD__}</p>
     <div class="actions"><span class="grow"></span><button class="btn" id="s-close">Закрыть</button><button class="btn primary" id="s-save">Сохранить</button></div>`);
 
   sheet.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => {
@@ -561,4 +562,9 @@ importSetupFromHash();
 render();
 if (google.isConnected()) runSync(true);
 if (new URLSearchParams(location.search).get('voice')) openVoice();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
+  // Когда вышла новая версия, перезагружаемся один раз, чтобы сразу её показать.
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller) { reloaded = true; location.reload(); } });
+}

@@ -1,2 +1,3 @@
 import { defineConfig } from 'vite';
-export default defineConfig({ base: './', build: { outDir: 'dist', target: 'es2020' } });
+const stamp = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Omsk', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+export default defineConfig({ base: './', build: { outDir: 'dist', target: 'es2020' }, define: { __BUILD__: JSON.stringify(stamp) } });
