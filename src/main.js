@@ -13,6 +13,7 @@ const ico = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>',
   tick: '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
   people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.8.3 5 2.6 5 5.8"/></svg>',
 };
@@ -35,6 +36,8 @@ const byDate = (a, b) => sortKey(a).localeCompare(sortKey(b));
 
 // ---------- Отрисовка ----------
 function render() {
+  // Не перерисовываем список посреди свайпа — дорисуем после.
+  if (typeof swipe !== 'undefined' && swipe.active && swipe.el) { render.pending = true; return; }
   const app = $('#app');
   const t = today();
   const items = store.all();
@@ -121,12 +124,11 @@ function renderWeek(items) {
 }
 
 function itemHtml(i, showDate = false) {
-  const lead = i.kind === 'task'
-    ? `<button class="check ${i.done ? 'on' : ''}" data-toggle="${i.id}" aria-label="${i.done ? 'Вернуть в работу' : 'Выполнено'}">${ico.tick}</button>`
-    : `<span class="kind-ico">${ico.people}</span>`;
+  const lead = `<button class="check ${i.done ? 'on' : ''}" data-toggle="${i.id}" aria-label="${i.done ? 'Вернуть в работу' : 'Отметить выполненным'}">${ico.tick}</button>`;
   const time = i.start ? `${i.start}${i.end ? `<small>${i.end}</small>` : ''}` : `<small>${i.kind === 'task' ? 'весь день' : 'весь день'}</small>`;
   const links = (i.links || []).map((l) => `<a class="chip link" href="${esc(l.url)}" target="_blank" rel="noopener" data-stop>🔗 ${esc(l.title || shortUrl(l.url))}</a>`).join('');
   return `
+    <div class="swipe" data-swipe="${i.id}"><div class="swipe-bg">${ico.trash}<span>Удалить</span></div>
     <div class="item ${i.kind} ${i.done ? 'done' : ''}" data-open="${i.id}">
       ${lead}
       <div class="body">
@@ -136,11 +138,12 @@ function itemHtml(i, showDate = false) {
           ${i.assignee ? `<span class="chip who">👤 ${esc(i.assignee)}</span>` : ''}
           ${i.location ? `<span class="chip">📍 ${esc(i.location)}</span>` : ''}
           ${links}
+          ${i.kind === 'meeting' ? '<span class="chip meet">встреча</span>' : ''}
           ${i.dirty ? '<span class="chip pending">не отправлено</span>' : ''}
         </div>
       </div>
       <div class="time">${time}</div>
-    </div>`;
+    </div></div>`;
 }
 
 function shortUrl(u) {
@@ -188,7 +191,7 @@ function openEditor(id, preset = {}) {
     <label class="field"><span>Заметки</span><textarea class="input" id="f-notes" rows="3">${esc(d.notes)}</textarea></label>
     <div class="field"><span>Ссылки на документы</span><div id="f-links">${(d.links.length ? d.links : []).map(linkRow).join('')}</div>
       <button class="btn small" type="button" id="f-addlink">+ Добавить ссылку</button></div>
-    ${it?.kind === 'task' || !it ? `<label class="check-line" id="f-done-line" ${kind !== 'task' ? 'hidden' : ''}><input type="checkbox" id="f-done" ${d.done ? 'checked' : ''}> Выполнено</label>` : ''}
+    <label class="check-line"><input type="checkbox" id="f-done" ${d.done ? 'checked' : ''}> Выполнено</label>
     ${it?.htmlLink ? `<p class="hint"><a href="${esc(it.htmlLink)}" target="_blank" rel="noopener">Открыть в Google Календаре</a></p>` : ''}
     <div class="actions">
       ${it ? '<button class="btn danger" id="f-del">Удалить</button>' : ''}
@@ -200,7 +203,6 @@ function openEditor(id, preset = {}) {
   sheet.querySelectorAll('[data-k]').forEach((b) => b.onclick = () => {
     kind = b.dataset.k;
     sheet.querySelectorAll('[data-k]').forEach((x) => x.classList.toggle('on', x === b));
-    const dl = $('#f-done-line', sheet); if (dl) dl.hidden = kind !== 'task';
   });
   $('#f-addlink', sheet).onclick = () => { $('#f-links', sheet).insertAdjacentHTML('beforeend', linkRow()); $('#f-links .link-row:last-child .u', sheet).focus(); };
   $('#f-links', sheet).onclick = (e) => { if (e.target.closest('[data-rm]')) e.target.closest('.link-row').remove(); };
@@ -216,7 +218,7 @@ function openEditor(id, preset = {}) {
     store.upsert({
       id: it?.id, kind, title, date: $('#f-date', sheet).value || today(), start, end,
       assignee: $('#f-who', sheet).value.trim(), notes: $('#f-notes', sheet).value.trim(), links,
-      done: kind === 'task' ? !!$('#f-done', sheet)?.checked : false,
+      done: !!$('#f-done', sheet)?.checked,
     });
     state.sel = $('#f-date', sheet).value || state.sel;
     closeSheet();
@@ -539,9 +541,60 @@ async function runSync(auto = false) {
 let syncTimer;
 function syncSoon() { clearTimeout(syncTimer); syncTimer = setTimeout(runSync, 300); }
 
+// ---------- Свайп влево — удалить (с подтверждением) ----------
+function confirmRemove(id) {
+  const it = store.get(id);
+  if (!it) return;
+  const sheet = openSheet(`
+    <h2>Удалить ${it.kind === 'task' ? 'задачу' : 'встречу'}?</h2>
+    <p style="margin:0 0 6px;font-weight:500">«${esc(it.title)}»</p>
+    <p class="hint">${esc(humanDate(it.date))}${it.start ? ', ' + it.start : ''}${it.gid ? '. Событие удалится и из Google Календаря.' : ''}</p>
+    <div class="actions"><span class="grow"></span><button class="btn" id="d-no">Отмена</button><button class="btn primary" id="d-yes">Удалить</button></div>`);
+  $('#d-no', sheet).onclick = closeSheet;
+  $('#d-yes', sheet).onclick = () => { store.remove(id); closeSheet(); toast('Удалено'); syncSoon(); };
+}
+
+var swipe = { el: null, id: null, x0: 0, y0: 0, dx: 0, active: false, suppressClick: false };
+document.addEventListener('pointerdown', (e) => {
+  const wrap = e.target.closest('[data-swipe]');
+  if (!wrap || e.target.closest('.sheet') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  Object.assign(swipe, { el: wrap.querySelector('.item'), wrap, id: wrap.dataset.swipe, x0: e.clientX, y0: e.clientY, dx: 0, active: false });
+});
+document.addEventListener('pointermove', (e) => {
+  if (!swipe.el) return;
+  const dx = e.clientX - swipe.x0, dy = e.clientY - swipe.y0;
+  if (!swipe.active) {
+    if (Math.abs(dx) < 10) return;
+    if (Math.abs(dy) > Math.abs(dx) || dx > 0) { swipe.el = null; return; } // вертикальная прокрутка или свайп вправо
+    swipe.active = true;
+    swipe.el.style.transition = 'none';
+    swipe.wrap.classList.add('swiping');
+  }
+  swipe.dx = Math.min(0, dx);
+  swipe.el.style.transform = `translateX(${swipe.dx}px)`;
+  swipe.wrap.classList.toggle('armed', swipe.dx < -swipe.wrap.offsetWidth * 0.3);
+});
+function endSwipe() {
+  if (!swipe.el) return;
+  const { el, wrap, id, dx, active } = swipe;
+  swipe.el = null;
+  if (!active) return;
+  swipe.suppressClick = true;
+  setTimeout(() => { swipe.suppressClick = false; }, 50);
+  el.style.transition = 'transform .2s ease';
+  el.style.transform = '';
+  wrap.classList.remove('armed');
+  setTimeout(() => wrap.classList.remove('swiping'), 200);
+  if (dx < -wrap.offsetWidth * 0.3) confirmRemove(id);
+  if (render.pending) { render.pending = false; setTimeout(render, 220); }
+}
+document.addEventListener('pointerup', endSwipe);
+document.addEventListener('pointercancel', endSwipe);
+
 // ---------- События ----------
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-stop]')) return;
+  if (swipe.suppressClick) { e.preventDefault(); return; }
   const el = e.target.closest('[data-act],[data-day],[data-tab],[data-toggle],[data-open]');
   if (!el || el.closest('.sheet')) return;
   if (el.dataset.day) { state.sel = el.dataset.day; if (state.tab === 'tasks') state.tab = 'day'; render(); return; }

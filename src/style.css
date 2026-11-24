@@ -149,3 +149,15 @@ textarea.input { resize: vertical; min-height: 70px; }
 .act.del .op { color: var(--danger); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(110px + env(safe-area-inset-bottom)); z-index: 30; background: var(--black); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toast, :root:not([data-theme="light"]) .plus, :root:not([data-theme="light"]) .seg button.on { background: #EEEEEE; color: #1E1E1E; } }
+
+/* Свайп влево для удаления */
+.swipe { position: relative; margin-bottom: 8px; border-radius: var(--r); }
+.swipe .item { margin-bottom: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.swipe-bg { position: absolute; inset: 0; border-radius: var(--r); background: var(--grey); color: #fff; display: none; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 20px; font-weight: 600; font-size: 14px; }
+.swipe-bg svg { width: 20px; height: 20px; }
+.swipe.swiping .swipe-bg { display: flex; }
+.swipe.armed .swipe-bg { background: var(--red); }
+.check { border-color: var(--task); }
+.item.meeting .check { border-color: var(--meet); }
+.item.meeting .check.on { background: var(--meet); }
+.chip.meet { background: var(--meet-soft); color: var(--meet); }

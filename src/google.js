@@ -123,7 +123,7 @@ function toEvent(it) {
   if (extra.length) description += SEP + 'Ссылки:\n' + extra.map((l) => `${l.title ? l.title + ': ' : ''}${l.url}`).join('\n');
   if (it.assignee) description += (extra.length ? '\n' : SEP) + `Ответственный: ${it.assignee}`;
   const ev = {
-    summary: (it.kind === 'task' && it.done ? DONE : '') + it.title,
+    summary: (it.done ? DONE : '') + it.title,
     description,
     extendedProperties: { private: {
       plKind: it.kind,
