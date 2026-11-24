@@ -13,9 +13,11 @@ let gisPromise = null;
 
 const saveToken = (t) => { token = t; try { t ? localStorage.setItem(TKEY, JSON.stringify(t)) : localStorage.removeItem(TKEY); } catch {} };
 
-export const isConfigured = () => !!store.getSettings().googleClientId;
-export const isConnected = () => !!token && !!store.getSettings().googleConnected;
-export const tokenValid = () => !!token && token.exp > Date.now();
+// Два способа подключения: через Google Apps Script (без Google Cloud) или через OAuth Client ID.
+const viaScript = () => store.getSettings().googleMode !== 'oauth';
+export const isConfigured = () => viaScript() ? !!store.getSettings().scriptUrl : !!store.getSettings().googleClientId;
+export const isConnected = () => !!store.getSettings().googleConnected && (viaScript() ? !!store.getSettings().scriptUrl : !!token);
+export const tokenValid = () => viaScript() || (!!token && token.exp > Date.now());
 
 function loadGis() {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
@@ -50,7 +52,10 @@ async function requestToken(prompt) {
 }
 
 export async function connect() {
-  await requestToken('consent');
+  if (viaScript()) {
+    if (!store.getSettings().scriptUrl) throw new Error('Вставьте адрес веб-приложения Apps Script.');
+    await scriptCall('', { query: { maxResults: '1' } });
+  } else await requestToken('consent');
   store.setSettings({ googleConnected: true });
 }
 
@@ -67,7 +72,29 @@ async function ensureToken() {
   return token.access;
 }
 
-async function api(path, { method = 'GET', body, query } = {}, retried = false) {
+// Запрос через развернутый скрипт: простой POST без preflight, скрипт сам ходит в Calendar API.
+async function scriptCall(path, { method = 'GET', body, query } = {}) {
+  const s = store.getSettings();
+  let res;
+  try {
+    res = await fetch(s.scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ secret: s.scriptSecret, calendarId: s.calendarId || 'primary', method, path, query, body }),
+    });
+  } catch {
+    throw new Error('Не удалось связаться со скриптом Google. Проверьте адрес и что доступ открыт для «Все» (Anyone).');
+  }
+  let out;
+  try { out = await res.json(); } catch { throw new Error('Скрипт Google ответил не так, как ожидалось. Проверьте, что развернута последняя версия.'); }
+  if (method === 'DELETE' && (out.status === 404 || out.status === 410)) return null;
+  if (out.status >= 400) throw new Error(`Google Календарь: ${out.data?.error?.message || 'ошибка ' + out.status}`);
+  return out.data;
+}
+
+async function api(path, opts = {}, retried = false) {
+  if (viaScript()) return scriptCall(path, opts);
+  const { method = 'GET', body, query } = opts;
   const access = await ensureToken();
   const cal = encodeURIComponent(store.getSettings().calendarId || 'primary');
   const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${cal}/events${path}`);

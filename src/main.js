@@ -2,6 +2,7 @@ import './style.css';
 import * as store from './store.js';
 import * as google from './google.js';
 import * as ai from './ai.js';
+import { scriptSource } from './script-template.js';
 import { today, addDays, humanDate, weekdayShort, dayNum, addMinutes, diffMinutes } from './time.js';
 
 // ---------- Утилиты ----------
@@ -236,40 +237,88 @@ const normalizeUrl = (u) => !u ? '' : /^[a-z]+:\/\//i.test(u) ? u : 'https://' +
 
 // --- Настройки ---
 function openSettings() {
+  if (!store.getSettings().scriptSecret) {
+    const rnd = crypto.getRandomValues(new Uint8Array(18));
+    store.setSettings({ scriptSecret: Array.from(rnd, (b) => b.toString(16).padStart(2, '0')).join('') });
+  }
   const s = store.getSettings();
+  let mode = s.googleMode === 'oauth' ? 'oauth' : 'script';
   const origin = location.origin;
+  const steps = `
+    <ol class="steps">
+      <li>Нажмите «Скопировать скрипт».</li>
+      <li>Откройте <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> под своим Google-аккаунтом. Откроется новый проект: удалите всё в редакторе и вставьте скопированное.</li>
+      <li>Нажмите 💾 «Сохранить», затем выберите функцию <b>authorize</b> и нажмите «Выполнить». Google попросит доступ: «Проверить разрешения» → ваш аккаунт → «Дополнительно» → «Перейти к проекту» → «Разрешить».</li>
+      <li>«Развертывание» → «Новое развертывание» → ⚙ тип «Веб-приложение». Запуск от имени: <b>Я</b>. Доступ: <b>Все</b>. «Развернуть».</li>
+      <li>Скопируйте «URL веб-приложения» (заканчивается на <b>/exec</b>) и вставьте ниже.</li>
+    </ol>`;
   const sheet = openSheet(`
     <h2>Настройки</h2>
     <div class="group-h" style="margin-top:0">Google Календарь</div>
-    <label class="field"><span>OAuth Client ID</span><input class="input" id="s-gid" value="${esc(s.googleClientId || '')}" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"></label>
-    <p class="hint">В Google Cloud добавьте адрес <b>${esc(origin)}</b> в «Authorized JavaScript origins».</p>
+    ${google.isConnected() ? `<p class="hint" style="margin:0 0 10px">✅ Подключён${mode === 'script' ? ' через Apps Script' : ''}.</p>` : ''}
+    <div class="seg" id="s-mode"><button data-m="script" class="${mode === 'script' ? 'on' : ''}">Через Apps Script</button><button data-m="oauth" class="${mode === 'oauth' ? 'on' : ''}">OAuth Client ID</button></div>
+    <div id="s-script" ${mode !== 'script' ? 'hidden' : ''}>
+      <p class="hint">Без Google Cloud и без карты. Делается один раз, лучше с компьютера.</p>
+      ${steps}
+      <div class="actions" style="margin:0 0 12px"><button class="btn small" id="s-copy">📋 Скопировать скрипт</button></div>
+      <label class="field"><span>Ключ доступа (уже вписан в скрипт)</span><input class="input" id="s-secret" value="${esc(s.scriptSecret)}" autocomplete="off"></label>
+      <p class="hint">Если настраиваете скрипт на компьютере, а пользуетесь с телефона, введите на телефоне тот же ключ и тот же URL.</p>
+      <label class="field"><span>URL веб-приложения</span><input class="input" id="s-url" value="${esc(s.scriptUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" inputmode="url"></label>
+    </div>
+    <div id="s-oauth" ${mode !== 'oauth' ? 'hidden' : ''}>
+      <label class="field"><span>OAuth Client ID</span><input class="input" id="s-gid" value="${esc(s.googleClientId || '')}" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"></label>
+      <p class="hint">В Google Cloud добавьте адрес <b>${esc(origin)}</b> в «Authorized JavaScript origins».</p>
+    </div>
     <label class="field"><span>Календарь</span><input class="input" id="s-cal" value="${esc(s.calendarId || 'primary')}" autocomplete="off"></label>
     <p class="hint">primary — основной календарь. Можно указать ID другого календаря.</p>
     <div class="actions" style="margin-top:0;margin-bottom:8px">
-      ${google.isConnected() ? '<button class="btn" id="s-gout">Отключить Google</button>' : '<button class="btn primary" id="s-gin">Подключить Google</button>'}
+      ${google.isConnected() ? '<button class="btn" id="s-gout">Отключить Google</button>' : ''}
+      <button class="btn primary" id="s-gin">${google.isConnected() ? 'Переподключить' : 'Подключить Google'}</button>
     </div>
+    <div id="s-err"></div>
     <div class="group-h">Голосовые команды (Claude)</div>
     <label class="field"><span>Ключ Anthropic API</span><input class="input" type="password" id="s-key" value="${esc(s.anthropicKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
     <p class="hint">Ключ хранится только в этом браузере и отправляется напрямую в Anthropic.</p>
-    <div id="s-err"></div>
     <div class="actions"><span class="grow"></span><button class="btn" id="s-close">Закрыть</button><button class="btn primary" id="s-save">Сохранить</button></div>`);
 
+  sheet.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => {
+    mode = b.dataset.m;
+    sheet.querySelectorAll('[data-m]').forEach((x) => x.classList.toggle('on', x === b));
+    $('#s-script', sheet).hidden = mode !== 'script';
+    $('#s-oauth', sheet).hidden = mode !== 'oauth';
+  });
+  $('#s-copy', sheet).onclick = async () => {
+    const secret = $('#s-secret', sheet).value.trim();
+    if (!secret) { $('#s-secret', sheet).focus(); return; }
+    store.setSettings({ scriptSecret: secret });
+    const code = scriptSource(secret);
+    try { await navigator.clipboard.writeText(code); toast('Скрипт скопирован'); }
+    catch {
+      $('#s-err', sheet).innerHTML = `<p class="hint">Не удалось скопировать автоматически. Выделите текст ниже и скопируйте вручную.</p><textarea class="input" rows="8" readonly>${esc(code)}</textarea>`;
+    }
+  };
   const saveFields = () => {
-    const prevCal = store.getSettings().calendarId;
-    store.setSettings({
+    const prev = store.getSettings();
+    const next = {
+      googleMode: mode,
       googleClientId: $('#s-gid', sheet).value.trim(),
+      scriptUrl: $('#s-url', sheet).value.trim(),
+      scriptSecret: $('#s-secret', sheet).value.trim() || prev.scriptSecret,
       calendarId: $('#s-cal', sheet).value.trim() || 'primary',
       anthropicKey: $('#s-key', sheet).value.trim(),
-    });
-    if (prevCal !== store.getSettings().calendarId && google.isConnected()) store.wipeRemoteCache();
+    };
+    store.setSettings(next);
+    if (prev.calendarId !== next.calendarId || (prev.googleMode || 'script') !== mode) store.wipeRemoteCache();
   };
   $('#s-close', sheet).onclick = closeSheet;
   $('#s-save', sheet).onclick = () => { saveFields(); closeSheet(); render(); runSync(); };
-  $('#s-gin', sheet)?.addEventListener('click', async () => {
+  $('#s-gin', sheet).onclick = async (e) => {
     saveFields();
+    e.target.disabled = true;
+    $('#s-err', sheet).innerHTML = '<p class="hint">Проверяю подключение…</p>';
     try { await google.connect(); closeSheet(); toast('Google Календарь подключён'); runSync(); }
-    catch (e) { $('#s-err', sheet).innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-  });
+    catch (err) { $('#s-err', sheet).innerHTML = `<div class="err">${esc(err.message)}</div>`; e.target.disabled = false; }
+  };
   $('#s-gout', sheet)?.addEventListener('click', () => { google.disconnect(); closeSheet(); render(); toast('Google отключён'); });
 }
 

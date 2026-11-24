@@ -14,16 +14,26 @@
 
 ## Что нужно один раз настроить
 
-### 1. Google OAuth Client ID (бесплатно, ~10 минут)
+### 1. Google Календарь через Apps Script (бесплатно, без карты и Google Cloud)
 
-1. Откройте https://console.cloud.google.com/ и создайте проект, например «Планировщик».
-2. «APIs & Services» → «Library» → найдите **Google Calendar API** → «Enable».
-3. «APIs & Services» → «OAuth consent screen» (Google Auth Platform): тип **External**, название «Планировщик», ваша почта. В «Audience» добавьте свою почту в **Test users**. В «Data access» добавьте scope `.../auth/calendar.events`.
-4. «Clients» (Credentials) → «Create client» → тип **Web application**.
-   В **Authorized JavaScript origins** добавьте: `https://kolpakovmihail46-lab.github.io`
-5. Скопируйте **Client ID** (вида `1234-abc.apps.googleusercontent.com`) и вставьте в настройках приложения, затем нажмите «Подключить Google».
+Удобнее делать с компьютера, один раз.
 
-Пока приложение в статусе «Testing», Google может раз в несколько дней просить войти заново — это нормально для личного использования.
+1. Откройте планировщик → ⚙ Настройки → «Через Apps Script» → «Скопировать скрипт».
+2. Откройте https://script.google.com/home/projects/create под своим Google-аккаунтом, удалите всё в редакторе и вставьте скрипт.
+3. «Сохранить» → выберите функцию `authorize` → «Выполнить». Google попросит доступ: «Проверить разрешения» → аккаунт → «Дополнительно» → «Перейти к проекту» → «Разрешить». Предупреждение «приложение не проверено» нормально: это ваш собственный скрипт.
+4. «Развертывание» → «Новое развертывание» → тип «Веб-приложение». Запуск от имени: **Я**. Доступ: **Все**. «Развернуть».
+5. Скопируйте URL веб-приложения (заканчивается на `/exec`), вставьте в настройках и нажмите «Подключить Google».
+
+Скрипт защищён ключом доступа, который вписан в него автоматически. Если скрипт настроен на компьютере, на телефоне введите в настройках тот же ключ и тот же URL.
+
+<details><summary>Запасной вариант: OAuth Client ID в Google Cloud</summary>
+
+1. https://console.cloud.google.com/projectcreate — создайте проект (баннер с предложением ввести карту можно закрыть).
+2. Включите **Google Calendar API**: https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
+3. «Google Auth Platform»: тип **External**, добавьте свою почту в **Test users**, scope `.../auth/calendar.events`.
+4. «Clients» → «Create client» → **Web application**, в **Authorized JavaScript origins**: `https://kolpakovmihail46-lab.github.io`
+5. Вставьте Client ID в настройках (вкладка «OAuth Client ID»). В этом режиме Google просит войти заново примерно раз в час.
+</details>
 
 ### 2. Ключ Anthropic API
 
