@@ -17,7 +17,8 @@ const ico = {
   people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.8.3 5 2.6 5 5.8"/></svg>',
 };
 
-const ENSO = '<svg class="enso" viewBox="0 0 100 100" aria-hidden="true"><path d="M78 24 A38 38 0 1 0 86 52" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>';
+// Знак «Японского домика» (крыша и улыбка) — фирменный красный.
+const MARK = '<svg class="brand-mark" viewBox="0 0 100 80" aria-hidden="true"><g fill="none" stroke="#E71E23" stroke-width="9"><path d="M61 4 L50 18 Q33 40 6 50"/><path d="M39 4 L50 18 Q67 40 94 50"/><path d="M25 63 Q50 77 75 63"/></g></svg>';
 const state = { sel: today(), tab: 'day', syncing: false, syncError: '' };
 
 function toast(msg, ms = 2600) {
@@ -54,9 +55,8 @@ function render() {
   app.innerHTML = `
   <div class="app">
     <div class="top">
-      <svg class="roof" viewBox="0 0 400 14" preserveAspectRatio="none" aria-hidden="true"><path d="M0 13 Q60 13 110 4 L290 4 Q340 13 400 13" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M110 4 L290 4" stroke="currentColor" stroke-width="5"/></svg>
       <div class="bar">
-        <h1>${esc(humanDate(state.sel))}</h1>
+        ${MARK}<h1>${esc(humanDate(state.sel))}</h1>
         ${google.isConnected() ? `<button class="icon-btn ${state.syncing ? 'spin' : ''}" data-act="sync" aria-label="Синхронизировать">${ico.sync}</button>` : ''}
         <button class="icon-btn" data-act="settings" aria-label="Настройки">${ico.gear}</button>
       </div>
@@ -97,7 +97,7 @@ function renderDay(items, t) {
   }
   const list = items.filter((i) => i.date === state.sel).sort(byDate);
   if (list.length) html += (html ? `<div class="group-h">${esc(humanDate(state.sel))}</div>` : '') + list.map((i) => itemHtml(i)).join('');
-  if (!html) html = `<div class="empty">${ENSO}<b>Свободный день</b>Нажмите на микрофон и скажите, например: «Встреча с поставщиком рыбы завтра в 11»</div>`;
+  if (!html) html = `<div class="empty">${MARK}<b>Свободный день</b>Нажмите на микрофон и скажите, например: «Встреча с поставщиком рыбы завтра в 11»</div>`;
   return html;
 }
 
