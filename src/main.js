@@ -31,6 +31,7 @@ function toast(msg, ms = 2600) {
   setTimeout(() => t.remove(), ms);
 }
 
+const REPEAT_LABEL = { daily: 'каждый день', weekly: 'каждую неделю', weekdays: 'по будням' };
 const sortKey = (i) => i.date + (i.start ? '1' + i.start : '0') + i.title;
 const byDate = (a, b) => sortKey(a).localeCompare(sortKey(b));
 
@@ -139,6 +140,7 @@ function itemHtml(i, showDate = false) {
           ${i.location ? `<span class="chip">📍 ${esc(i.location)}</span>` : ''}
           ${links}
           ${i.kind === 'meeting' ? '<span class="chip meet">встреча</span>' : ''}
+          ${i.recurringId || i.repeat ? `<span class="chip">🔁 ${esc(REPEAT_LABEL[i.repeat] || 'повтор')}</span>` : ''}
           ${i.dirty ? '<span class="chip pending">не отправлено</span>' : ''}
         </div>
       </div>
@@ -187,6 +189,11 @@ function openEditor(id, preset = {}) {
       <label class="field"><span>Конец</span><input class="input" type="time" id="f-end" value="${esc(d.end || '')}"></label>
     </div>
     <p class="hint" id="f-hint">Без времени — на весь день.</p>
+    ${it?.recurringId ? '<p class="hint">🔁 Повторяющаяся запись: изменения сохранятся только для этого дня.</p>' : `
+    <label class="field"><span>Повторять</span><select class="input" id="f-repeat">
+      ${[['', 'Не повторять'], ['daily', 'Каждый день'], ['weekdays', 'По будням (пн–пт)'], ['weekly', 'Каждую неделю в этот день']].map(([v, t]) => `<option value="${v}" ${(d.repeat || '') === v ? 'selected' : ''}>${t}</option>`).join('')}
+    </select></label>
+    ${it?.gid && !it.recurringId ? '' : '<p class="hint" style="margin-top:-8px">Повторы появятся после синхронизации с Google Календарём.</p>'}`}
     <label class="field"><span>Ответственный</span><input class="input" id="f-who" value="${esc(d.assignee)}" placeholder="Например: Иван, шеф ТЦ «Галерея»"></label>
     <label class="field"><span>Заметки</span><textarea class="input" id="f-notes" rows="3">${esc(d.notes)}</textarea></label>
     <div class="field"><span>Ссылки на документы</span><div id="f-links">${(d.links.length ? d.links : []).map(linkRow).join('')}</div>
@@ -207,7 +214,7 @@ function openEditor(id, preset = {}) {
   $('#f-addlink', sheet).onclick = () => { $('#f-links', sheet).insertAdjacentHTML('beforeend', linkRow()); $('#f-links .link-row:last-child .u', sheet).focus(); };
   $('#f-links', sheet).onclick = (e) => { if (e.target.closest('[data-rm]')) e.target.closest('.link-row').remove(); };
   $('#f-cancel', sheet).onclick = closeSheet;
-  if (it) $('#f-del', sheet).onclick = () => { if (confirmDelete(sheet)) { store.remove(it.id); closeSheet(); toast('Удалено'); syncSoon(); } };
+  if (it) $('#f-del', sheet).onclick = () => confirmRemove(it.id);
   if (!it) setTimeout(() => $('#f-title', sheet).focus(), 50);
   $('#f-save', sheet).onclick = () => {
     const title = $('#f-title', sheet).value.trim();
@@ -217,6 +224,7 @@ function openEditor(id, preset = {}) {
     let end = start ? ($('#f-end', sheet).value || null) : null;
     store.upsert({
       id: it?.id, kind, title, date: $('#f-date', sheet).value || today(), start, end,
+      ...($('#f-repeat', sheet) && !(it?.gid) ? { repeat: $('#f-repeat', sheet).value || null } : {}),
       assignee: $('#f-who', sheet).value.trim(), notes: $('#f-notes', sheet).value.trim(), links,
       done: !!$('#f-done', sheet)?.checked,
     });
@@ -455,6 +463,7 @@ function describe(a) {
     if (a.date || a.start || a.end) det.push(`Было: ${when(target.date, target.start, target.end) || '—'} → станет: ${when(a.date || target.date, a.start || target.start, a.end)}`);
     if (a.title && a.title !== target.title) det.push(`Новое название: «${a.title}»`);
   }
+  if (a.op === 'create' && a.repeat) det.push(`Повтор: ${REPEAT_LABEL[a.repeat]}`);
   if (a.assignee) det.push(`Ответственный: ${a.assignee}`);
   if (a.notes) det.push(`Заметка: ${a.notes}`);
   if (a.add_links?.length) det.push(`Ссылки: ${a.add_links.map((l) => l.title || shortUrl(l.url)).join(', ')}`);
@@ -491,7 +500,7 @@ function showProposal(sheet, res) {
   };
   $('#p-edit', box)?.addEventListener('click', () => {
     const a = res.actions[0];
-    if (a.op === 'create') openEditor(null, pickDefined({ kind: a.kind || 'task', title: a.title, date: a.date, start: a.start, end: a.end, assignee: a.assignee, notes: a.notes, links: a.add_links }));
+    if (a.op === 'create') openEditor(null, pickDefined({ kind: a.kind || 'task', title: a.title, date: a.date, start: a.start, end: a.end, assignee: a.assignee, notes: a.notes, links: a.add_links, repeat: a.repeat }));
     else { const t = store.get(a.target_id); openEditor(t.id, updatedFields(t, a)); }
   });
 }
@@ -514,7 +523,7 @@ function applyActions(actions) {
   let firstDate = null;
   for (const a of actions) {
     if (a.op === 'create') {
-      store.upsert(pickDefined({ kind: a.kind || 'task', title: a.title, date: a.date, start: a.start, end: a.start ? a.end : null, assignee: a.assignee || '', notes: a.notes || '', links: (a.add_links || []).map((l) => ({ title: l.title, url: normalizeUrl(l.url) })) }));
+      store.upsert(pickDefined({ kind: a.kind || 'task', title: a.title, date: a.date, start: a.start, end: a.start ? a.end : null, assignee: a.assignee || '', notes: a.notes || '', links: (a.add_links || []).map((l) => ({ title: l.title, url: normalizeUrl(l.url) })), repeat: a.repeat || null }));
       firstDate ??= a.date;
       continue;
     }
@@ -549,8 +558,10 @@ function confirmRemove(id) {
     <h2>Удалить ${it.kind === 'task' ? 'задачу' : 'встречу'}?</h2>
     <p style="margin:0 0 6px;font-weight:500">«${esc(it.title)}»</p>
     <p class="hint">${esc(humanDate(it.date))}${it.start ? ', ' + it.start : ''}${it.gid ? '. Событие удалится и из Google Календаря.' : ''}</p>
-    <div class="actions"><span class="grow"></span><button class="btn" id="d-no">Отмена</button><button class="btn primary" id="d-yes">Удалить</button></div>`);
+    ${it.recurringId ? `<div class="actions"><button class="btn" id="d-no">Отмена</button><span class="grow"></span><button class="btn" id="d-yes">Только этот день</button><button class="btn primary" id="d-all">Всю серию</button></div>`
+      : `<div class="actions"><span class="grow"></span><button class="btn" id="d-no">Отмена</button><button class="btn primary" id="d-yes">Удалить</button></div>`}`);
   $('#d-no', sheet).onclick = closeSheet;
+  $('#d-all', sheet)?.addEventListener('click', () => { store.removeSeries(it.recurringId); closeSheet(); toast('Серия удалена'); syncSoon(); });
   $('#d-yes', sheet).onclick = () => { store.remove(id); closeSheet(); toast('Удалено'); syncSoon(); };
 }
 

@@ -143,6 +143,11 @@ function toEvent(it) {
     ev.end = { date: addDays(it.date, 1), dateTime: null, timeZone: null };
   }
   if (it.kind === 'task') ev.transparency = 'transparent';
+  // Повторение задаём только при создании серии; экземпляры серии правим по одному.
+  if (it.repeat && !it.gid && !it.recurringId) {
+    const wd = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][new Date(it.date + 'T12:00:00Z').getUTCDay()];
+    ev.recurrence = [{ daily: 'RRULE:FREQ=DAILY', weekly: `RRULE:FREQ=WEEKLY;BYDAY=${wd}`, weekdays: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' }[it.repeat]];
+  }
   return ev;
 }
 
@@ -177,6 +182,7 @@ function fromEvent(ev) {
     notes: p.plKind ? notes : desc,
     links,
     htmlLink: ev.htmlLink,
+    recurringId: ev.recurringEventId || null,
     location: ev.location || '',
   };
 }

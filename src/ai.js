@@ -18,7 +18,7 @@ const SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['op', 'target_id', 'kind', 'title', 'date', 'start', 'end', 'assignee', 'notes', 'add_links'],
+        required: ['op', 'target_id', 'kind', 'title', 'date', 'start', 'end', 'assignee', 'notes', 'repeat', 'add_links'],
         properties: {
           op: { type: 'string', enum: ['create', 'update', 'complete', 'reopen', 'delete'] },
           target_id: nullable('string'),
@@ -29,6 +29,7 @@ const SCHEMA = {
           end: { ...nullable('string'), description: 'HH:MM, 24h' },
           assignee: nullable('string'),
           notes: nullable('string'),
+          repeat: { type: ['string', 'null'], enum: ['daily', 'weekly', 'weekdays', null], description: 'Только для create: повторение' },
           add_links: {
             type: 'array',
             items: {
@@ -67,7 +68,7 @@ function buildSystem() {
 - complete — отметить задачу выполненной; reopen — вернуть в работу;
 - delete — удалить.
 Для update/complete/reopen/delete укажи target_id из списка ниже. Выбирай запись по смыслу названия и дате; если подходят несколько и выбрать нельзя, верни пустой actions и задай вопрос в clarification.
-«Поручи/назначь Ивану» = assignee "Иван" (в именительном падеже). Ссылки добавляй в add_links только если в команде есть адрес; иначе пустой массив.
+«Поручи/назначь Ивану» = assignee "Иван" (в именительном падеже). «Каждый день/ежедневно» = repeat daily, «по будням» = weekdays, «каждую неделю/еженедельно/по понедельникам» = weekly (date — ближайший такой день). Иначе repeat = null. Ссылки добавляй в add_links только если в команде есть адрес; иначе пустой массив.
 Название (title) формулируй коротко, с заглавной буквы, без даты и времени.
 Если команда вообще не про планировщик, верни пустой actions и короткое пояснение в clarification.
 Одна команда может содержать несколько действий.

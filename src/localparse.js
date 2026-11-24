@@ -153,7 +153,7 @@ function cleanTitle(s) {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 }
 
-const empty = () => ({ op: 'create', target_id: null, kind: null, title: null, date: null, start: null, end: null, assignee: null, notes: null, add_links: [] });
+const empty = () => ({ op: 'create', target_id: null, kind: null, title: null, date: null, start: null, end: null, assignee: null, notes: null, repeat: null, add_links: [] });
 const ask = (q) => ({ actions: [], clarification: q });
 const optionsText = (opts) => 'Подходит несколько записей: ' + opts.map((o) => `«${o.title}»`).join(', ') + '. Уточните название.';
 
@@ -209,6 +209,12 @@ export function parseLocal(input) {
   // Иначе — создание новой записи
   const s = { text: low };
   const links = parseLinks(s);
+  let repeat = take(s, /(?:каждый день|ежедневно|каждое утро|каждый вечер)/, () => 'daily')
+    || take(s, /(?:по будням|каждый будний день|в будни)/, () => 'weekdays')
+    || take(s, /(?:каждую неделю|еженедельно|раз в неделю)/, () => 'weekly');
+  // «по понедельникам», «каждый вторник» — еженедельно в этот день
+  const wdm = !repeat && s.text.match(/(?:по |каждый |каждую |каждое )(понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)\S*/);
+  if (wdm) { repeat = 'weekly'; s.text = s.text.replace(wdm[0], ' в ' + wdm[1] + (wdm[1].endsWith('ц') || wdm[1].endsWith('д') || wdm[1].endsWith('т') && wdm[1] === 'суббот' ? 'у' : '')); }
   const assignee = parseAssignee(s);
   const date = parseDate(s);
   const time = parseTime(s);
@@ -218,7 +224,7 @@ export function parseLocal(input) {
   if (kind === 'meeting' && /^(С|Со) /.test(title)) title = 'Встреча ' + title.charAt(0).toLowerCase() + title.slice(1);
   if (!title) return ask('Не понял, что записать. Скажите, например: «Встреча с поставщиком завтра в 11».');
   return {
-    actions: [{ ...empty(), op: 'create', kind, title, date: date || s.dateFromTime || today(), start: time?.start || null, end: time?.end || null, assignee, add_links: links }],
+    actions: [{ ...empty(), op: 'create', kind, title, date: date || s.dateFromTime || today(), start: time?.start || null, end: time?.end || null, assignee, repeat, add_links: links }],
     clarification: null,
   };
 }

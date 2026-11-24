@@ -39,6 +39,13 @@ export function remove(id) {
 }
 
 // Помечаем запись как отправленную в Google.
+// Удалить всю повторяющуюся серию: убираем экземпляры и ставим «надгробие» для основного события в Google.
+export function removeSeries(recurringId) {
+  items = items.filter((i) => i.recurringId !== recurringId);
+  items.push({ id: uid(), gid: recurringId, deleted: true, dirty: true, title: '', date: '0000-00-00' });
+  commit();
+}
+
 export function markSynced(id, patch = {}) {
   const it = get(id);
   if (!it) return;
