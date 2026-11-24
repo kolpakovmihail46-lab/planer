@@ -43,7 +43,7 @@ function render() {
   }
   const days = Array.from({ length: 35 }, (_, k) => addDays(t, k - 3));
   const s = store.getSettings();
-  const needSetup = !google.isConnected() || !ai.isConfigured();
+  const needSetup = !google.isConnected();
   const pending = store.dirty().length;
   let sub = google.isConnected()
     ? (state.syncError ? 'Ошибка синхронизации' : s.lastSync ? `Синхронизировано в ${new Date(s.lastSync).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Omsk' })}` : 'Google Календарь подключён')
@@ -73,7 +73,7 @@ function render() {
       </div>
     </div>
     <main>
-      ${needSetup ? `<div class="banner"><div><b>Осталось подключить</b>${[!google.isConnected() && 'Google Календарь', !ai.isConfigured() && 'голосовые команды'].filter(Boolean).join(' и ')}</div><button class="btn small primary" data-act="settings">Настроить</button></div>` : ''}
+      ${needSetup ? `<div class="banner"><div><b>Осталось подключить</b>${'Google Календарь'}</div><button class="btn small primary" data-act="settings">Настроить</button></div>` : ''}
       ${state.syncError ? `<div class="err">${esc(state.syncError)}</div>` : ''}
       ${state.tab === 'day' ? renderDay(items, t) : state.tab === 'tasks' ? renderTasks(items, t) : renderWeek(items)}
     </main>
@@ -279,7 +279,7 @@ function openSettings() {
     <div id="s-err"></div>
     <div class="group-h">Голосовые команды (Claude)</div>
     <label class="field"><span>Ключ Anthropic API</span><input class="input" type="password" id="s-key" value="${esc(s.anthropicKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
-    <p class="hint">Ключ хранится только в этом браузере и отправляется напрямую в Anthropic.</p>
+    <p class="hint">Необязательно. Без ключа команды разбираются по шаблонам (бесплатно); с ключом Claude понимает свободную речь. Ключ хранится только в этом браузере.</p>
     <div class="group-h">Другое устройство</div>
     <p class="hint">Ссылка перенесёт все настройки на телефон. Отправьте её себе (например, в «Избранное» Telegram) и откройте на телефоне в Chrome. В ссылке ваши ключи, никому её не пересылайте.</p>
     <div class="actions" style="margin-top:0"><button class="btn small" id="s-link">🔗 Скопировать ссылку для телефона</button></div>
@@ -418,7 +418,6 @@ function openVoice() {
     const cmd = text.value.trim();
     if (!cmd) return;
     voice.stop();
-    if (!ai.isConfigured()) { $('#v-result', sheet).innerHTML = `<div class="err">Добавьте ключ Anthropic API в настройках.</div>`; return; }
     status.textContent = 'Разбираю команду…';
     $('#v-go', sheet).disabled = true;
     try {
@@ -465,10 +464,12 @@ function showProposal(sheet, res) {
     return;
   }
   const single = res.actions.length === 1 && ['create', 'update'].includes(res.actions[0].op);
+  if (res.local) box.dataset.local = '1';
   box.innerHTML = `
     <div class="group-h">Проверьте перед сохранением</div>
     ${res.actions.map(describe).join('')}
     ${res.clarification ? `<div class="q">${esc(res.clarification)}</div>` : ''}
+    ${res.local ? '<p class="hint">Разобрано по шаблонам, без Claude. Если что-то не так, нажмите «Поправить».</p>' : ''}
     <div class="actions">
       ${single ? '<button class="btn" id="p-edit">Поправить</button>' : ''}
       <span class="grow"></span>

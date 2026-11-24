@@ -2,6 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as store from './store.js';
 import { partsOf, addDays, weekdayLong, TZ } from './time.js';
+import { parseLocal } from './localparse.js';
 
 const MODEL = 'claude-opus-5-5';
 
@@ -84,7 +85,8 @@ export const isConfigured = () => !!store.getSettings().anthropicKey;
 
 export async function parseCommand(text) {
   const apiKey = store.getSettings().anthropicKey;
-  if (!apiKey) throw new Error('Не указан ключ Anthropic API в настройках.');
+  // Без ключа — встроенный разбор по шаблонам.
+  if (!apiKey) return { ...parseLocal(text), local: true };
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let response;
   try {
