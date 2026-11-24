@@ -280,6 +280,10 @@ function openSettings() {
     <div class="group-h">Голосовые команды (Claude)</div>
     <label class="field"><span>Ключ Anthropic API</span><input class="input" type="password" id="s-key" value="${esc(s.anthropicKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
     <p class="hint">Ключ хранится только в этом браузере и отправляется напрямую в Anthropic.</p>
+    <div class="group-h">Другое устройство</div>
+    <p class="hint">Ссылка перенесёт все настройки на телефон. Отправьте её себе (например, в «Избранное» Telegram) и откройте на телефоне в Chrome. В ссылке ваши ключи, никому её не пересылайте.</p>
+    <div class="actions" style="margin-top:0"><button class="btn small" id="s-link">🔗 Скопировать ссылку для телефона</button></div>
+    <div id="s-linkout"></div>
     <div class="actions"><span class="grow"></span><button class="btn" id="s-close">Закрыть</button><button class="btn primary" id="s-save">Сохранить</button></div>`);
 
   sheet.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => {
@@ -320,7 +324,42 @@ function openSettings() {
     try { await google.connect(); closeSheet(); toast('Google Календарь подключён'); runSync(); }
     catch (err) { $('#s-err', sheet).innerHTML = `<div class="err">${esc(err.message)}</div>`; e.target.disabled = false; }
   };
+  $('#s-link', sheet).onclick = async () => {
+    saveFields();
+    const link = makeSetupLink();
+    try { await navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }
+    catch { $('#s-linkout', sheet).innerHTML = `<textarea class="input" rows="3" readonly>${esc(link)}</textarea>`; }
+  };
   $('#s-gout', sheet)?.addEventListener('click', () => { google.disconnect(); closeSheet(); render(); toast('Google отключён'); });
+}
+
+// --- Перенос настроек на другое устройство через ссылку (данные в #фрагменте, на сервер не уходят) ---
+const SETUP_KEYS = { googleMode: 'm', scriptUrl: 'u', scriptSecret: 's', calendarId: 'c', googleClientId: 'g', anthropicKey: 'k' };
+function makeSetupLink() {
+  const st = store.getSettings();
+  const data = {};
+  for (const [k, short] of Object.entries(SETUP_KEYS)) if (st[k]) data[short] = st[k];
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${location.origin}${location.pathname}#setup=${b64}`;
+}
+function importSetupFromHash() {
+  const m = location.hash.match(/^#setup=([A-Za-z0-9_-]+)/);
+  if (!m) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
+    const data = JSON.parse(json);
+    const patch = {};
+    for (const [k, short] of Object.entries(SETUP_KEYS)) if (data[short]) patch[k] = data[short];
+    if ((patch.googleMode || 'script') === 'script' && patch.scriptUrl) patch.googleConnected = true;
+    store.wipeRemoteCache();
+    store.setSettings(patch);
+    toast(patch.googleConnected ? 'Настройки перенесены, загружаю календарь…' : 'Настройки перенесены');
+    return true;
+  } catch {
+    toast('Ссылка с настройками повреждена');
+    return false;
+  }
 }
 
 // ---------- Голос ----------
@@ -517,6 +556,7 @@ store.onChange(render);
 window.addEventListener('online', () => runSync(true));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { render(); if (google.isConnected()) runSync(true); } });
 
+importSetupFromHash();
 render();
 if (google.isConnected()) runSync(true);
 if (new URLSearchParams(location.search).get('voice')) openVoice();
