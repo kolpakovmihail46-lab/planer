@@ -1,22 +1,27 @@
 :root {
-  --bg: #f6f5f1; --surface: #ffffff; --surface-2: #efeee8; --text: #1c1b18; --muted: #6b6a63;
-  --line: #e2e0d8; --accent: #14532d; --accent-ink: #ffffff; --accent-soft: #dcefe2;
-  --task: #b45309; --task-soft: #fdf0dc; --meet: #1d4ed8; --meet-soft: #e3eafc;
-  --danger: #b91c1c; --shadow: 0 6px 24px rgba(0,0,0,.10);
+  /* Японский дом: бумага сёдзи, тёмное дерево, татами, киноварь, индиго */
+  --bg: #f3ede1; --surface: #fbf8f1; --surface-2: #e9e1d0; --text: #2b2420; --muted: #85786a;
+  --line: #d8ccb6; --wood: #4a3426; --wood-2: #6b4c37; --accent: #4a3426; --accent-ink: #fbf8f1; --accent-soft: #e6ddc9;
+  --shu: #b8432f; --shu-ink: #fff8f2; --tatami: #c3b97f;
+  --task: #a3452f; --task-soft: #f5e1d8; --meet: #34507a; --meet-soft: #dfe5ee;
+  --danger: #a3271b; --shadow: 0 6px 20px rgba(74,52,38,.16);
+  --radius: 4px;
+  --serif: "Noto Serif", "PT Serif", Georgia, serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12130f; --surface: #1c1d18; --surface-2: #262721; --text: #ecebe4; --muted: #9c9b92;
-    --line: #2f302a; --accent: #4ade80; --accent-ink: #0b1a10; --accent-soft: #173623;
-    --task: #fbbf24; --task-soft: #3a2c10; --meet: #93b4ff; --meet-soft: #1c2747;
-    --danger: #f87171; --shadow: 0 6px 24px rgba(0,0,0,.5);
+    --bg: #17140f; --surface: #221d17; --surface-2: #2d261e; --text: #efe7d8; --muted: #a39683;
+    --line: #3a3127; --wood: #c9a77c; --wood-2: #a8865d; --accent: #c9a77c; --accent-ink: #1b1611; --accent-soft: #33291f;
+    --shu: #e0664f; --shu-ink: #1b1611; --tatami: #8d8558;
+    --task: #ec8a6f; --task-soft: #3a2219; --meet: #9db5dc; --meet-soft: #1f2a3c;
+    --danger: #f08a7c; --shadow: 0 6px 20px rgba(0,0,0,.55);
     color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
-body { font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+body { font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 a { color: var(--accent); }
@@ -132,3 +137,83 @@ textarea.input { resize: vertical; min-height: 70px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(110px + env(safe-area-inset-bottom)); z-index: 30; background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; }
 .steps li { margin-bottom: 6px; }
+
+/* ---------- Стиль «японский домик» ---------- */
+body {
+  background-color: var(--bg);
+  /* лёгкая фактура бумаги васи */
+  background-image:
+    radial-gradient(rgba(120,90,60,.035) 1px, transparent 1px),
+    radial-gradient(rgba(120,90,60,.025) 1px, transparent 1px);
+  background-size: 7px 7px, 13px 13px;
+  background-position: 0 0, 3px 5px;
+}
+.top {
+  background-color: var(--bg);
+  background-image: inherit;
+  border-bottom: 3px solid var(--wood);
+  box-shadow: 0 1px 0 var(--line);
+  padding-bottom: 10px;
+}
+/* крыша над заголовком */
+.roof { display: block; width: 100%; height: 14px; color: var(--wood); margin: 0 0 6px; }
+.bar h1 { font-family: var(--serif); font-weight: 700; font-size: 24px; }
+.sub { letter-spacing: .01em; }
+.icon-btn { border-radius: var(--radius); background: transparent; border: 1px solid var(--line); color: var(--wood); }
+
+/* дни — как панели сёдзи */
+.day {
+  border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line);
+  background-image: linear-gradient(var(--line), var(--line)); background-size: 100% 1px; background-repeat: no-repeat; background-position: 0 26px;
+}
+.day .wd { letter-spacing: .06em; }
+.day .n { font-family: var(--serif); }
+.day.today .n { color: var(--shu); }
+.day.sel { background: var(--wood); border-color: var(--wood); background-image: none; }
+.day .dots i.t { background: var(--shu); }
+
+.tabs { border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--line); }
+.tabs button { border-radius: 2px; }
+.tabs button.on { background: var(--surface); box-shadow: inset 0 -2px 0 var(--shu); }
+
+.group-h { font-family: var(--serif); text-transform: none; letter-spacing: .02em; font-size: 15px; color: var(--wood); display: flex; align-items: center; gap: 10px; }
+.group-h::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.group-h.late { color: var(--danger); }
+
+/* карточки — бумажные панели в деревянной раме */
+.item {
+  border-radius: var(--radius); border: 1px solid var(--line); border-left: 4px solid var(--meet);
+  box-shadow: 0 1px 0 rgba(74,52,38,.06);
+}
+.item.task { border-left-color: var(--task); }
+.item .time { font-family: var(--serif); }
+.chip { border-radius: 2px; }
+.check { border-radius: 3px; border-color: var(--task); }
+.check.on { background: var(--task); }
+.kind-ico { border-radius: 3px; }
+
+.banner { border-radius: var(--radius); border: 1px solid var(--line); background: var(--accent-soft); }
+.empty b { font-family: var(--serif); }
+.empty .enso { display: block; width: 72px; height: 72px; margin: 0 auto 12px; color: var(--wood); opacity: .55; }
+
+/* микрофон — красная печать ханко */
+.mic { background: var(--shu); color: var(--shu-ink); border: 3px solid var(--bg); outline: 1px solid var(--shu); }
+.plus { border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); color: var(--wood); }
+.pulse { background: var(--shu); color: var(--shu-ink); }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(184,67,47,.45); } 50% { box-shadow: 0 0 0 18px rgba(184,67,47,0); } }
+
+.sheet { border-radius: 6px 6px 0 0; border-top: 3px solid var(--wood); background-image: inherit; background-color: var(--bg); }
+.sheet h2 { font-family: var(--serif); }
+.grab { background: var(--wood-2); opacity: .5; }
+.input { border-radius: var(--radius); }
+.input:focus { border-color: var(--wood); }
+.seg { border-radius: var(--radius); border: 1px solid var(--line); }
+.seg button { border-radius: 2px; }
+.seg button.on { box-shadow: inset 0 -2px 0 var(--shu); }
+.btn { border-radius: var(--radius); }
+.btn.primary { background: var(--wood); color: var(--accent-ink); }
+.act { border-radius: var(--radius); border: 1px solid var(--line); border-left: 4px solid var(--wood); }
+.act .op { color: var(--wood); }
+.q, .err { border-radius: var(--radius); }
+.toast { border-radius: var(--radius); background: var(--wood); color: var(--accent-ink); }
+.dock { background: linear-gradient(transparent, var(--bg) 45%); }
