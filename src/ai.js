@@ -135,7 +135,9 @@ const GSCHEMA = {
     },
   },
 };
-const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+// Если модель перегружена или недоступна, пробуем следующую.
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function geminiParse(text) {
   const key = store.getSettings().geminiKey;
@@ -145,7 +147,11 @@ async function geminiParse(text) {
     generationConfig: { responseMimeType: 'application/json', responseSchema: GSCHEMA, temperature: 0.1 },
   };
   let lastErr;
-  for (const model of GEMINI_MODELS) {
+  const busy = (status, data) => status === 503 || status === 429 || status === 500 || /high demand|overloaded|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(data?.error?.message || data?.error?.status || '');
+  const saved = store.getSettings().geminiModel;
+  const models = saved ? [saved, ...GEMINI_MODELS.filter((m) => m !== saved)] : GEMINI_MODELS;
+  for (const [i, model] of models.entries()) {
+    if (i > 0) await sleep(300);
     let status, data;
     if (scriptReady()) {
       try { ({ status, data } = await scriptGemini({ model, key, body })); }
@@ -155,12 +161,15 @@ async function geminiParse(text) {
         ({ status, data } = await geminiDirect(model, key, body, true));
       }
     } else ({ status, data } = await geminiDirect(model, key, body, false));
-    if (status === 404) { lastErr = new Error('Модель Gemini недоступна'); continue; }
+    if (status === 404 || (status === 400 && /not found|not supported for generateContent/i.test(data?.error?.message || ''))) { lastErr = lastErr || new Error('Модель Gemini недоступна'); continue; }
+    if (busy(status, data)) { lastErr = new Error('Gemini сейчас перегружен, попробуйте через минуту.'); continue; }
     if (status >= 400) throw new Error(geminiError(status, data));
     const cand = data?.candidates?.[0];
     const out = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
     if (!out) throw new Error(cand?.finishReason === 'SAFETY' ? 'Gemini отказался обрабатывать команду.' : 'Пустой ответ Gemini.');
-    return JSON.parse(out);
+    const parsed = JSON.parse(out);
+    if (saved !== model) store.setSettings({ geminiModel: model });
+    return parsed;
   }
   throw lastErr;
 }
