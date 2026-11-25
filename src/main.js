@@ -644,5 +644,14 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
   // Когда вышла новая версия, перезагружаемся один раз, чтобы сразу её показать.
   let reloaded = false;
+  // Открытая надолго вкладка сама подтягивает новую версию: проверяем при возврате в приложение и раз в 15 минут.
+  const checkVersion = async () => {
+    try {
+      const v = await (await fetch('./version.json', { cache: 'no-store' })).json();
+      if (v.build && v.build !== __BUILD__ && !document.querySelector('.sheet')) location.reload();
+    } catch {}
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+  setInterval(checkVersion, 15 * 60 * 1000);
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller) { reloaded = true; location.reload(); } });
 }

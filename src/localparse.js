@@ -273,7 +273,8 @@ export function parseLocal(input) {
   const time = parseTime(s);
   const kind = MEETING_WORDS.test(low) && !/^(?:позвонить|написать|напомнить|отправить)/.test(s.text.trim()) ? 'meeting' : 'task';
   // Возвращаем исходный регистр для названия (имена собственные).
-  let title = restoreCase(cleanTitle(s.text), raw);
+  const named = s.text.match(/(?:под названием|с названием|под именем|с темой|на тему|называется|название)\s*:?\s+(.+)$/);
+  let title = restoreCase(cleanTitle(named ? named[1] : s.text), raw);
   if (kind === 'meeting' && /^(С|Со) /.test(title)) title = 'Встреча ' + title.charAt(0).toLowerCase() + title.slice(1);
   title = title.replace(/^(Планёрк|Встреч)у(?=\s|$)/, '$1а');
   if (!title && kind === 'meeting' && (time || date)) title = 'Встреча';
