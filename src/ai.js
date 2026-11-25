@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as store from './store.js';
 import { partsOf, addDays, weekdayLong, TZ } from './time.js';
 import { parseLocal } from './localparse.js';
+import { scriptGemini, scriptReady } from './google.js';
 
 const MODEL = 'claude-opus-5-5';
 
@@ -82,12 +83,112 @@ ${days}
 ${JSON.stringify(items)}`;
 }
 
-export const isConfigured = () => !!store.getSettings().anthropicKey;
+export const isConfigured = () => !!(store.getSettings().anthropicKey || store.getSettings().geminiKey);
+export const engine = () => (store.getSettings().anthropicKey ? 'claude' : store.getSettings().geminiKey ? 'gemini' : 'local');
+
+const cleanup = (parsed) => {
+  const keys = ['target_id', 'kind', 'title', 'date', 'start', 'end', 'assignee', 'notes', 'repeat'];
+  parsed.actions = (parsed.actions || []).map((a) => {
+    const o = { ...a, add_links: (a.add_links || []).filter((l) => l && l.url).map((l) => ({ title: l.title || '', url: l.url })) };
+    for (const k of keys) if (o[k] === undefined || o[k] === '') o[k] = null;
+    return o;
+  });
+  parsed.clarification = parsed.clarification || null;
+  // Отбрасываем действия, которые ссылаются на несуществующие записи.
+  parsed.actions = parsed.actions.filter((a) => a.op === 'create' ? a.title && a.date : store.get(a.target_id));
+  return parsed;
+};
 
 export async function parseCommand(text) {
+  const e = engine();
+  if (e === 'local') return { ...parseLocal(text), local: true };
+  if (e === 'gemini') {
+    try { return cleanup(await geminiParse(text)); }
+    catch (err) {
+      // Если Gemini недоступен, не оставляем без результата: разбираем шаблонами и показываем причину.
+      return { ...parseLocal(text), local: true, warning: err.message };
+    }
+  }
+  return cleanup(await claudeParse(text));
+}
+
+// ——— Google Gemini (бесплатный ключ из aistudio.google.com) ———
+const S = (extra = {}) => ({ type: 'STRING', nullable: true, ...extra });
+const GSCHEMA = {
+  type: 'OBJECT',
+  required: ['actions', 'clarification'],
+  properties: {
+    clarification: S({ description: 'Вопрос пользователю, если команду нельзя однозначно понять; иначе null.' }),
+    actions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        required: ['op', 'target_id', 'kind', 'title', 'date', 'start', 'end', 'assignee', 'notes', 'repeat', 'add_links'],
+        properties: {
+          op: { type: 'STRING', enum: ['create', 'update', 'complete', 'reopen', 'delete'] },
+          target_id: S(), kind: S({ enum: ['meeting', 'task'] }), title: S(),
+          date: S({ description: 'YYYY-MM-DD' }), start: S({ description: 'HH:MM, 24h' }), end: S({ description: 'HH:MM, 24h' }),
+          assignee: S(), notes: S(), repeat: S({ enum: ['daily', 'weekly', 'weekdays'], description: 'Только для create' }),
+          add_links: { type: 'ARRAY', items: { type: 'OBJECT', required: ['title', 'url'], properties: { title: { type: 'STRING' }, url: { type: 'STRING' } } } },
+        },
+      },
+    },
+  },
+};
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+
+async function geminiParse(text) {
+  const key = store.getSettings().geminiKey;
+  const body = {
+    systemInstruction: { parts: [{ text: buildSystem() }] },
+    contents: [{ role: 'user', parts: [{ text }] }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: GSCHEMA, temperature: 0.1 },
+  };
+  let lastErr;
+  for (const model of GEMINI_MODELS) {
+    let status, data;
+    if (scriptReady()) {
+      try { ({ status, data } = await scriptGemini({ model, key, body })); }
+      catch (e) {
+        if (e.message !== 'OLD_SCRIPT') throw e;
+        // Старая версия скрипта — пробуем напрямую.
+        ({ status, data } = await geminiDirect(model, key, body, true));
+      }
+    } else ({ status, data } = await geminiDirect(model, key, body, false));
+    if (status === 404) { lastErr = new Error('Модель Gemini недоступна'); continue; }
+    if (status >= 400) throw new Error(geminiError(status, data));
+    const cand = data?.candidates?.[0];
+    const out = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
+    if (!out) throw new Error(cand?.finishReason === 'SAFETY' ? 'Gemini отказался обрабатывать команду.' : 'Пустой ответ Gemini.');
+    return JSON.parse(out);
+  }
+  throw lastErr;
+}
+
+async function geminiDirect(model, key, body, oldScript) {
+  let res;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body),
+    });
+  } catch { throw new Error('Нет связи с Gemini.' + (oldScript ? ' Обновите скрипт Google (Настройки → «Скопировать скрипт»), тогда запросы пойдут через него.' : '')); }
+  const data = await res.json().catch(() => null);
+  if (res.status === 400 && /location/i.test(data?.error?.message || '') && oldScript)
+    throw new Error('Gemini не работает напрямую из России. Обновите скрипт Google: Настройки → «Скопировать скрипт», вставьте его вместо старого и сделайте новое развертывание.');
+  return { status: res.status, data };
+}
+
+function geminiError(status, data) {
+  const msg = data?.error?.message || '';
+  if (/API key not valid|API_KEY_INVALID/i.test(msg)) return 'Ключ Gemini не подходит. Проверьте его в настройках.';
+  if (/location/i.test(msg)) return 'Gemini недоступен из вашей страны. Подключите календарь через скрипт Google — тогда запросы пойдут через него.';
+  if (status === 429) return 'Бесплатный лимит Gemini на минуту исчерпан, попробуйте чуть позже.';
+  return 'Gemini: ' + (msg || 'ошибка ' + status);
+}
+
+// ——— Claude ———
+async function claudeParse(text) {
   const apiKey = store.getSettings().anthropicKey;
-  // Без ключа — встроенный разбор по шаблонам.
-  if (!apiKey) return { ...parseLocal(text), local: true };
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let response;
   try {
@@ -111,8 +212,5 @@ export async function parseCommand(text) {
   if (response.stop_reason === 'max_tokens') throw new Error('Ответ Claude оборвался, попробуйте короче.');
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock) throw new Error('Пустой ответ Claude.');
-  const parsed = JSON.parse(textBlock.text);
-  // Отбрасываем действия, которые ссылаются на несуществующие записи.
-  parsed.actions = (parsed.actions || []).filter((a) => a.op === 'create' ? a.title && a.date : store.get(a.target_id));
-  return parsed;
+  return JSON.parse(textBlock.text);
 }

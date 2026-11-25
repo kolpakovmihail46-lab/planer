@@ -289,9 +289,18 @@ function openSettings() {
       <button class="btn primary" id="s-gin">${google.isConnected() ? 'Переподключить' : 'Подключить Google'}</button>
     </div>
     <div id="s-err"></div>
-    <div class="group-h">Голосовые команды (Claude)</div>
-    <label class="field"><span>Ключ Anthropic API</span><input class="input" type="password" id="s-key" value="${esc(s.anthropicKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
-    <p class="hint">Необязательно. Без ключа команды разбираются по шаблонам (бесплатно); с ключом Claude понимает свободную речь. Ключ хранится только в этом браузере.</p>
+    <div class="group-h">Голосовые команды</div>
+    <p class="hint">Без ключа команды разбираются по шаблонам. С ключом нейросеть понимает свободную речь. Ключи хранятся только в этом браузере.</p>
+    <label class="field"><span>Ключ Google Gemini (бесплатный)</span><input class="input" type="password" id="s-gem" value="${esc(s.geminiKey || '')}" placeholder="AIza…" autocomplete="off"></label>
+    <details class="hint"><summary>Как получить ключ Gemini</summary>
+      <ol>
+        <li>Откройте <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> под своим Google-аккаунтом. Если пишет, что сервис недоступен в вашей стране, откройте эту страницу один раз через VPN.</li>
+        <li>Нажмите «Create API key», выберите любой проект и скопируйте ключ (начинается с AIza).</li>
+        <li>Вставьте его в поле выше и нажмите «Сохранить». Карта не нужна.</li>
+        <li>Чтобы Gemini работал без VPN, обновите скрипт Google: «Скопировать скрипт» выше, вставьте вместо старого кода, затем «Развертывание → Управление развертываниями → ✏️ → Версия: новая → Развернуть». Адрес не изменится.</li>
+      </ol>
+    </details>
+    <label class="field"><span>Ключ Anthropic API (Claude), если есть</span><input class="input" type="password" id="s-key" value="${esc(s.anthropicKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
     <div class="group-h">Другое устройство</div>
     <p class="hint">Ссылка перенесёт все настройки на телефон. Отправьте её себе (например, в «Избранное» Telegram) и откройте на телефоне в Chrome. В ссылке ваши ключи, никому её не пересылайте.</p>
     <div class="actions" style="margin-top:0"><button class="btn small" id="s-link">🔗 Скопировать ссылку для телефона</button></div>
@@ -324,6 +333,7 @@ function openSettings() {
       scriptSecret: $('#s-secret', sheet).value.trim() || prev.scriptSecret,
       calendarId: $('#s-cal', sheet).value.trim() || 'primary',
       anthropicKey: $('#s-key', sheet).value.trim(),
+      geminiKey: $('#s-gem', sheet).value.trim(),
     };
     store.setSettings(next);
     if (prev.calendarId !== next.calendarId || (prev.googleMode || 'script') !== mode) store.wipeRemoteCache();
@@ -347,7 +357,7 @@ function openSettings() {
 }
 
 // --- Перенос настроек на другое устройство через ссылку (данные в #фрагменте, на сервер не уходят) ---
-const SETUP_KEYS = { googleMode: 'm', scriptUrl: 'u', scriptSecret: 's', calendarId: 'c', googleClientId: 'g', anthropicKey: 'k' };
+const SETUP_KEYS = { googleMode: 'm', scriptUrl: 'u', scriptSecret: 's', calendarId: 'c', googleClientId: 'g', anthropicKey: 'k', geminiKey: 'q' };
 function makeSetupLink() {
   const st = store.getSettings();
   const data = {};
@@ -484,7 +494,8 @@ function showProposal(sheet, res) {
     <div class="group-h">Проверьте перед сохранением</div>
     ${res.actions.map(describe).join('')}
     ${res.clarification ? `<div class="q">${esc(res.clarification)}</div>` : ''}
-    ${res.local ? '<p class="hint">Разобрано по шаблонам, без Claude. Если что-то не так, нажмите «Поправить».</p>' : ''}
+    ${res.warning ? `<div class="err">${esc(res.warning)}</div>` : ''}
+    ${res.local ? `<p class="hint">Разобрано по шаблонам${ai.isConfigured() ? '' : ' (ключа нейросети нет, см. Настройки)'}. Если что-то не так, нажмите «Поправить».</p>` : ''}
     <div class="actions">
       ${single ? '<button class="btn" id="p-edit">Поправить</button>' : ''}
       <span class="grow"></span>

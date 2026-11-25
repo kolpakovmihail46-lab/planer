@@ -92,6 +92,23 @@ async function scriptCall(path, { method = 'GET', body, query } = {}) {
   return out.data;
 }
 
+// Запрос к Gemini через Apps Script (обходит региональные ограничения Gemini).
+export async function scriptGemini(ai) {
+  const s = store.getSettings();
+  let res;
+  try {
+    res = await fetch(s.scriptUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ secret: s.scriptSecret, ai }) });
+  } catch { throw new Error('Не удалось связаться со скриптом Google.'); }
+  const out = await res.json().catch(() => null);
+  if (!out || !out.gemini) {
+    if (out?.status === 403) throw new Error('Скрипт Google: неверный ключ доступа.');
+    throw new Error('OLD_SCRIPT');
+  }
+  return out;
+}
+
+export const scriptReady = () => viaScript() && !!store.getSettings().scriptUrl;
+
 async function api(path, opts = {}, retried = false) {
   if (viaScript()) return scriptCall(path, opts);
   const { method = 'GET', body, query } = opts;

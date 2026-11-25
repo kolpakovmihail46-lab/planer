@@ -1,6 +1,6 @@
 // Текст скрипта Google Apps Script, который пользователь вставляет на script.google.com.
 export function scriptSource(secret) {
-  return `// Планировщик: доступ к вашему Google Календарю.
+  return `// Планировщик: доступ к вашему Google Календарю (версия 2: с поддержкой Gemini).
 // Вставьте этот код целиком в новый проект на script.google.com.
 const SECRET = '${secret}';
 
@@ -8,6 +8,7 @@ function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
     if (req.secret !== SECRET) return out({ status: 403, data: { error: { message: 'Неверный ключ доступа' } } });
+    if (req.ai) return gemini(req.ai);
     const path = req.path || '';
     if (!/^(\\/[A-Za-z0-9_@.%-]+)?$/.test(path)) return out({ status: 400, data: { error: { message: 'Недопустимый запрос' } } });
     let url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(req.calendarId || 'primary') + '/events' + path;
@@ -27,6 +28,17 @@ function doPost(e) {
   } catch (err) {
     return out({ status: 500, data: { error: { message: String(err) } } });
   }
+}
+
+// Голосовые команды: запрос к Gemini идёт с серверов Google, поэтому работает из любой страны.
+function gemini(ai) {
+  if (!/^[a-z0-9.-]+$/.test(ai.model || '')) return out({ status: 400, data: { error: { message: 'Недопустимая модель' } } });
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + ai.model + ':generateContent', {
+    method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': ai.key },
+    payload: JSON.stringify(ai.body), muteHttpExceptions: true,
+  });
+  const text = res.getContentText();
+  return out({ status: res.getResponseCode(), data: text ? JSON.parse(text) : null, gemini: true });
 }
 
 function out(o) {
