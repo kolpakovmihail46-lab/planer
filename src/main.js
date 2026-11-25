@@ -387,17 +387,18 @@ const voice = {
     rec.interimResults = true;
     rec.continuous = false;
     rec.maxAlternatives = 1;
-    let finalText = '';
+    let finalText = '', lastText = '';
     rec.onresult = (e) => {
       let interim = '';
       for (let k = e.resultIndex; k < e.results.length; k++) {
         const r = e.results[k];
         if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
       }
-      onText((finalText + ' ' + interim).trim());
+      lastText = (finalText + ' ' + interim).trim();
+      onText(lastText);
     };
     rec.onerror = (e) => { this.lastError = e.error; };
-    rec.onend = () => { this.rec = null; onEnd(finalText.trim(), this.lastError); this.lastError = null; };
+    rec.onend = () => { this.rec = null; onEnd(finalText.trim() || lastText, this.lastError); this.lastError = null; };
     this.rec = rec;
     rec.start();
     return true;
